@@ -31,8 +31,10 @@ struct BookshelfView: View {
 
                 // 书籍列表
                 List(books, id: \.self) { book in
-                    Text(book.lastPathComponent)
-                }
+                                NavigationLink(destination: ReaderView(bookURL: book)) {
+                                    Text(book.lastPathComponent)
+                                }
+                            }
             }
             .onAppear {
                 books = FileManagerHelper.shared.listBooks()
