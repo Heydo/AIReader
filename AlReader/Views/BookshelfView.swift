@@ -1,11 +1,11 @@
 import SwiftUI
-import UniformTypeIdentifiers
+import UniformTypeIdentifiers // 添加导入语句
 
 struct BookshelfView: View {
     @State private var books: [URL] = []
-    @State private var isImporting: Bool = false // 控制文件选择器是否显示
-    @State private var showAlert: Bool = false // 控制弹窗显示
-    @State private var alertMessage: String = "" // 存储弹窗提示信息
+    @State private var isImporting: Bool = false
+    @State private var showAlert: Bool = false
+    @State private var alertMessage: String = ""
 
     var body: some View {
         NavigationView {
@@ -19,7 +19,7 @@ struct BookshelfView: View {
                     Spacer()
 
                     Button(action: {
-                        isImporting = true // 打开文件选择器
+                        isImporting = true
                     }) {
                         Image(systemName: "plus")
                             .resizable()
@@ -31,7 +31,9 @@ struct BookshelfView: View {
 
                 // 书籍列表
                 List(books, id: \.self) { book in
-                    Text(book.lastPathComponent)
+                    NavigationLink(destination: getReaderView(for: book)) {
+                        Text(book.lastPathComponent)
+                    }
                 }
             }
             .onAppear {
@@ -39,16 +41,26 @@ struct BookshelfView: View {
             }
             .fileImporter(
                 isPresented: $isImporting,
-                allowedContentTypes: [UTType.plainText, UTType.epub],
+                allowedContentTypes: [UTType.plainText, UTType.epub], // 使用 UTType
                 allowsMultipleSelection: false
             ) { result in
                 handleFileImport(result: result)
-                isImporting = false // ✅ 关闭选择器后重置状态
+                isImporting = false
             }
-            // 绑定 Alert
             .alert(isPresented: $showAlert) {
                 Alert(title: Text("提示"), message: Text(alertMessage), dismissButton: .default(Text("确定")))
             }
+        }
+    }
+
+    // 根据文件格式返回对应的阅读视图
+    private func getReaderView(for fileURL: URL) -> some View {
+        if fileURL.pathExtension == "txt" {
+            return AnyView(TXTReaderView(fileURL: fileURL))
+        } else if fileURL.pathExtension == "epub" {
+            return AnyView(Text("EPUB 阅读功能待实现")) // 后续替换为 EPUBReaderView
+        } else {
+            return AnyView(Text("不支持的文件格式"))
         }
     }
 
@@ -58,16 +70,12 @@ struct BookshelfView: View {
             let selectedFiles = try result.get()
             guard let selectedFile = selectedFiles.first else { return }
 
-            // 尝试复制文件
             let success = FileManagerHelper.shared.copyBookToDocuments(from: selectedFile)
-
-            // 如果失败，则弹出提示
             if !success {
                 alertMessage = "文件已存在: \(selectedFile.lastPathComponent)"
                 showAlert = true
             }
 
-            // 重新加载书籍列表
             books = FileManagerHelper.shared.listBooks()
         } catch {
             print("❌ 文件导入失败: \(error.localizedDescription)")
