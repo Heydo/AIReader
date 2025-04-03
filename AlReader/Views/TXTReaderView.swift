@@ -15,6 +15,12 @@ struct TXTReaderView: View {
     @State private var currentTime = Date()
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
+    // 初始化时开启电池监控
+    init(fileURL: URL) {
+        self.fileURL = fileURL
+        UIDevice.current.isBatteryMonitoringEnabled = true
+    }
+    
     var body: some View {
         VStack {
             // 中间内容区域
@@ -24,19 +30,35 @@ struct TXTReaderView: View {
             HStack {
                 Text(currentTime, formatter: dateFormatter)
                 Spacer()
-                Text("电量: \(Int(batteryLevel * 100))%")
+                Text(batteryStatusText) // 使用计算属性处理显示逻辑
             }
             .padding()
             .frame(height: UIFont.preferredFont(forTextStyle: .body).pointSize * 1.5)
             .onReceive(timer) { _ in
                 currentTime = Date()
-                batteryLevel = UIDevice.current.batteryLevel
+                updateBatteryLevel()
             }
         }
         .navigationTitle(fileURL.lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
     }
+    // 安全更新电量
+    private func updateBatteryLevel() {
+        batteryLevel = UIDevice.current.isBatteryMonitoringEnabled ? 
+            UIDevice.current.batteryLevel : 
+            -1 // 用-1表示不可用
+    }
     
+    // 电量显示文本逻辑
+    private var batteryStatusText: String {
+        guard UIDevice.current.isBatteryMonitoringEnabled else {
+            return "电量: 不可用"
+        }
+        
+        let level = Int(batteryLevel * 100)
+        return batteryLevel < 0 ? "电量: 读取中..." : "电量: \(level)%"
+    }
+
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
@@ -104,5 +126,10 @@ class TextReaderViewController: UIViewController {
         } catch {
             print("❌ 加载文本失败: \(error.localizedDescription)")
         }
+    }
+
+    deinit {
+        // 清理时关闭电池监控（如果是全局单例需要更复杂的处理）
+        UIDevice.current.isBatteryMonitoringEnabled = false
     }
 }
