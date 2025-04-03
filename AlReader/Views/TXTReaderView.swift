@@ -83,9 +83,17 @@ struct TextReaderViewControllerRepresentable: UIViewControllerRepresentable {
 class TextReaderViewController: UIViewController {
     private let textView = UITextView()
 
+    private var errorMessage: String? {
+        didSet {
+            updateErrorDisplay()
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupTextView()
+
+        setupErrorLabel()
     }
 
     private func setupTextView() {
@@ -118,13 +126,72 @@ class TextReaderViewController: UIViewController {
         ])
     }
 
+    private func setupErrorLabel() {
+        let label = UILabel()
+        label.numberOfLines = 0
+        label.textColor = .systemRed
+        label.textAlignment = .center
+        label.isHidden = true
+        label.tag = 999 // 用于后续查找
+        label.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(label)
+        
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            label.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 20),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -20)
+        ])
+    }
+    
+    private func updateErrorDisplay() {
+        guard let label = view.viewWithTag(999) as? UILabel else { return }
+        
+        if let message = errorMessage {
+            label.text = "⚠️ 加载失败\n\(message)"
+            label.isHidden = false
+            textView.isHidden = true
+        } else {
+            label.isHidden = true
+            textView.isHidden = false
+        }
+    }
+
     // 加载 .txt 文件内容
     func loadText(from fileURL: URL) {
-        do {
-            let text = try String(contentsOf: fileURL, encoding: .utf8)
-            textView.text = text
-        } catch {
-            print("❌ 加载文本失败: \(error.localizedDescription)")
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do {
+                let text = try String(contentsOf: fileURL, encoding: .utf8)
+                
+                // 验证文件内容是否为空
+                guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    throw NSError(domain: "TXTReaderError", code: 2, userInfo: [
+                        NSLocalizedDescriptionKey: "文件内容为空"
+                    ])
+                }
+                
+                DispatchQueue.main.async {
+                    self?.errorMessage = nil
+                    self?.textView.text = text
+                }
+            } catch {
+                let errorMessage: String
+                
+                switch (error as NSError).code {
+                case NSFileReadNoSuchFileError:
+                    errorMessage = "文件不存在"
+                case NSFileReadNoPermissionError:
+                    errorMessage = "无权限访问文件"
+                case NSFileReadUnknownStringEncodingError:
+                    errorMessage = "不支持的文本编码（请使用UTF-8格式）"
+                default:
+                    errorMessage = error.localizedDescription
+                }
+                
+                DispatchQueue.main.async {
+                    self?.errorMessage = errorMessage
+                }
+            }
         }
     }
 
